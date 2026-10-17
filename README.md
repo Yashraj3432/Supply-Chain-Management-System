@@ -48,28 +48,11 @@ Supply Chain Management System/
         └── styles.css
 ```
 
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- Docker Desktop (for MySQL), or a local MySQL 8 server
 
 ## 1. Start MySQL
 
 ```bash
 docker compose up -d
-```
-
-This starts MySQL on `localhost:3306` (database `scm_db`, user `scm_user`, password `scm_password`) and Adminer on http://localhost:8080 for browsing the database.
-
-**Using your own MySQL instead?** Create the database and user:
-
-```sql
-CREATE DATABASE scm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'scm_user'@'localhost' IDENTIFIED BY 'scm_password';
-GRANT ALL PRIVILEGES ON scm_db.* TO 'scm_user'@'localhost';
-GRANT ALL PRIVILEGES ON test_scm_db.* TO 'scm_user'@'localhost';
-FLUSH PRIVILEGES;
 ```
 
 ## 2. Backend
@@ -124,53 +107,4 @@ npm run dev
 
 Open http://localhost:5173 and sign in with `admin / Admin@12345`. In development, Vite proxies `/api` to Django, so no CORS setup is needed.
 
-For a production build: `npm run build` (output in `frontend/dist/`). If the API is on a different host, set `VITE_API_URL` (see `frontend/.env.example`) and add the frontend origin to `CORS_ALLOWED_ORIGINS` in `backend/.env`.
 
-## Running tests
-
-```bash
-cd backend
-python manage.py test                       # against MySQL (needs test_scm_db grant)
-DB_ENGINE=sqlite python manage.py test      # quick run without MySQL (macOS/Linux)
-$env:DB_ENGINE="sqlite"; python manage.py test   # same on Windows PowerShell
-```
-
-## API reference
-
-All endpoints are under `/api/` and require `Authorization: Bearer <access token>` except login and refresh. List endpoints are paginated (`?page=`, `?page_size=`), searchable (`?search=`) and sortable (`?ordering=field` or `-field`).
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/auth/login/` | `{username, password}` → `{access, refresh, user}` |
-| POST | `/auth/refresh/` | `{refresh}` → new `{access, refresh}` |
-| GET / PATCH | `/auth/me/` | Current user |
-| POST | `/auth/register/` | Create user (admin only) |
-| POST | `/auth/change-password/` | `{old_password, new_password}` |
-| CRUD | `/suppliers/` | Filters: `is_active`, `city`, `country` |
-| GET | `/suppliers/{id}/purchase_orders/` | POs for a supplier |
-| CRUD | `/categories/`, `/warehouses/` | Reference data |
-| CRUD | `/items/` | Filters: `category`, `preferred_supplier`, `warehouse`, `low_stock`, `out_of_stock`, `min_qty`, `max_qty`, `is_active`. POST accepts `opening_quantity`. |
-| GET | `/items/low-stock/` | Items at or below reorder level |
-| GET | `/items/{id}/transactions/` | Ledger for one item |
-| GET / POST | `/transactions/` | Ledger; POST for `adjustment` (signed qty), `return`, `transfer_in`, `transfer_out` |
-| GET / POST / PATCH | `/consumptions/` | Record material consumption (deducts stock) |
-| GET | `/alerts/` | Filter `status=open\|acknowledged\|resolved` |
-| POST | `/alerts/{id}/acknowledge/`, `/alerts/{id}/resolve/` | Alert actions |
-| POST | `/alerts/rescan/` | Re-evaluate all items |
-| CRUD | `/purchase-orders/` | Nested `lines`; editable/deletable only in draft |
-| POST | `/purchase-orders/{id}/status/` | `{status: submitted\|approved\|draft\|cancelled}` |
-| POST | `/purchase-orders/{id}/receive/` | `{receipts: [{line, quantity}], notes}` |
-| GET | `/reports/dashboard/` | KPIs, PO status counts, trend, low stock, recent movements |
-| GET | `/reports/stock-valuation/` | `?category=` |
-| GET | `/reports/consumption/` | `?start=&end=` |
-| GET | `/reports/purchases/` | `?start=&end=` |
-| GET | `/reports/movement/` | `?start=&end=&only_moved=true` |
-
-Add `?export=csv` to any report endpoint to download CSV.
-
-## Design notes
-
-- `Item.quantity_on_hand` is only changed by `inventory/services.py::apply_stock_movement`, which writes the ledger entry, updates the balance and syncs low-stock alerts in one transaction. Purchase receipts and consumption both call it, so a failure anywhere rolls back everything.
-- Ledger entries are append-only (no update/delete via API or admin). Corrections are made with adjustment entries.
-- Reports avoid MySQL `CONVERT_TZ`, so they work even when the MySQL server has no time-zone tables loaded.
-- `scm/__init__.py` uses `mysqlclient` if installed and falls back to the pure-Python `PyMySQL` driver otherwise.
