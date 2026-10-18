@@ -1,13 +1,3 @@
-"""
-Stock movement service.
-
-All stock changes go through `apply_stock_movement`, which:
-  * locks the Item row (SELECT ... FOR UPDATE) inside a DB transaction,
-  * validates that stock never goes negative,
-  * writes an immutable StockTransaction ledger entry,
-  * updates Item.quantity_on_hand,
-  * opens / resolves LowStockAlerts automatically.
-"""
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -22,11 +12,7 @@ class InsufficientStockError(ValidationError):
 
 
 def _signed_quantity(transaction_type: str, quantity: Decimal) -> Decimal:
-    """Return the signed delta for a movement.
-
-    For adjustment the caller passes a signed quantity directly.
-    For inbound types quantity is made positive, for outbound negative.
-    """
+   
     quantity = Decimal(quantity)
     if transaction_type == StockTransaction.Type.ADJUSTMENT:
         return quantity
@@ -40,7 +26,7 @@ def _signed_quantity(transaction_type: str, quantity: Decimal) -> Decimal:
 
 
 def sync_low_stock_alert(item: Item) -> LowStockAlert | None:
-    """Open an alert if the item is low and none is open; resolve open alerts when stock recovers."""
+   
     open_alerts = item.alerts.filter(status__in=[LowStockAlert.Status.OPEN, LowStockAlert.Status.ACKNOWLEDGED])
     if item.is_low_stock:
         if open_alerts.exists():
